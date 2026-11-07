@@ -136,6 +136,14 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
 .channels .bad { color: #d64545; font-weight: 600; margin-left: auto; }
 .fine { color: var(--muted); font-size: 12px; margin: 8px 0 0; line-height: 1.4; }
 
+.map-link {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--card); border-radius: 16px; padding: 14px;
+  color: var(--brand); font-weight: 600; font-size: 15px; text-decoration: none;
+}
+.map-link span { margin-left: auto; }
+.map-link svg { flex: none; }
+
 footer { text-align: center; color: var(--muted); font-size: 11px; margin-top: 4px; }
 
 /* Settings sheet */

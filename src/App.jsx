@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Gauge from './components/Gauge.jsx';
 import HistoryChart from './components/HistoryChart.jsx';
 import Settings from './components/Settings.jsx';
-import { RANGES, fetchCurrent, fetchHistory, load, save } from './api.js';
+import { RANGES, fetchCurrent, fetchHistory, load, mapUrl, save } from './api.js';
 import { category, channelsDisagree, effectivePm, pmToAqi, windowAdvice } from './aqi.js';
 
 const CFG_KEY = 'zen-air-config';
@@ -252,6 +252,17 @@ export default function App() {
           </div>
           {abWarn && <p className="fine">One laser counter may be dirty or failing. A spider or dust inside the housing is the usual cause.</p>}
         </section>
+      )}
+
+      {ready && (
+        <a className="map-link" href={mapUrl(cfg, live?.lat, live?.lon)} target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+            <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" fill="none" stroke="currentColor" strokeWidth="2" />
+            <circle cx="12" cy="10" r="2.6" fill="currentColor" />
+          </svg>
+          Open in PurpleAir map
+          <span aria-hidden="true">↗</span>
+        </a>
       )}
 
       <footer>PurpleAir data · AQI uses EPA's 2024 PM2.5 scale</footer>

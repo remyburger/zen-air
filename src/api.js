@@ -7,6 +7,8 @@ const CURRENT_FIELDS = [
   'name',
   'last_seen',
   'location_type',
+  'latitude',
+  'longitude',
   'pm2.5_cf_1',
   'pm2.5_cf_1_a',
   'pm2.5_cf_1_b',
@@ -60,6 +62,8 @@ export async function fetchCurrent(cfg) {
     name: s.name,
     lastSeen: s.last_seen, // unix seconds
     outdoor: s.location_type === 0,
+    lat: s.latitude,
+    lon: s.longitude,
     cf1: s['pm2.5_cf_1'],
     cf1A: s['pm2.5_cf_1_a'],
     cf1B: s['pm2.5_cf_1_b'],
@@ -100,6 +104,14 @@ export async function fetchHistory(cfg, rangeKey) {
     .filter((p) => p.t != null)
     .sort((a, b) => a.t - b.t); // API doesn't guarantee order
   return { range: rangeKey, rows, fetchedAt: Date.now() };
+}
+
+// Link to this sensor on map.purpleair.com (read key included for private sensors).
+export function mapUrl({ sensorIndex, readKey }, lat, lon) {
+  const qs = new URLSearchParams({ select: sensorIndex });
+  if (readKey) qs.set('key', readKey);
+  const hash = lat != null && lon != null ? `#14/${lat}/${lon}` : '';
+  return `https://map.purpleair.com/1/mAQI/a10/p604800/cC0?${qs}${hash}`;
 }
 
 // ---- tiny localStorage helpers (wrapped: storage can throw in private mode) ----
