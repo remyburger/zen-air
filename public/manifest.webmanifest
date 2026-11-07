@@ -1,0 +1,15 @@
+{
+  "name": "Zen Air",
+  "short_name": "Zen Air",
+  "description": "Live air quality from my PurpleAir Zen sensor",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f1f0f7",
+  "theme_color": "#7b5cd6",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
