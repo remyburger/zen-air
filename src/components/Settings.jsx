@@ -73,7 +73,7 @@ export default function Settings({ cfg, onSave, onClose, canClose }) {
           <input type="checkbox" checked={useEpa} onChange={(e) => setUseEpa(e.target.checked)} />
           <span>
             <b>EPA correction</b>
-            <small>US EPA's humidity and smoke correction. Closer to official monitors; usually lowers AQI.</small>
+            <small>US EPA's humidity and smoke correction. Closer to official monitors. Raises AQI a little on clean days, lowers it in smoke.</small>
           </span>
         </label>
 
