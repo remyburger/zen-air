@@ -22,7 +22,8 @@ const HISTORY_FIELDS = ['pm2.5_cf_1', 'pm2.5_atm', 'humidity'];
 
 // average = minutes per point; PurpleAir limits how far back each average can reach.
 export const RANGES = {
-  '24h': { seconds: 24 * 3600, average: 60, cacheMs: 30 * 60 * 1000 },
+  // 10-minute averages (144 rows). 60 = hourly (cheapest), 0 = raw ~2-min readings (priciest).
+  '24h': { seconds: 24 * 3600, average: 10, cacheMs: 10 * 60 * 1000 },
   '7d': { seconds: 7 * 24 * 3600, average: 60, cacheMs: 60 * 60 * 1000 },
 };
 
@@ -103,7 +104,20 @@ export async function fetchHistory(cfg, rangeKey) {
     }))
     .filter((p) => p.t != null)
     .sort((a, b) => a.t - b.t); // API doesn't guarantee order
-  return { range: rangeKey, rows, fetchedAt: Date.now() };
+  return { range: rangeKey, average: r.average, rows, fetchedAt: Date.now() };
+}
+
+// Remaining API points for the key's organization. PurpleAir says this call is free.
+export async function fetchPoints({ apiKey }) {
+  const body = await request('/organization', {}, { apiKey });
+  let remaining = body?.remaining_points;
+  if (typeof remaining !== 'number') {
+    // Fall back to any numeric "remaining…" field in case the name differs.
+    const k = Object.keys(body || {}).find((key) => /remaining/i.test(key) && typeof body[key] === 'number');
+    remaining = k ? body[k] : null;
+  }
+  if (remaining == null) throw new Error('Could not read remaining points');
+  return { remaining, at: Date.now() };
 }
 
 // Link to this sensor on map.purpleair.com (read key included for private sensors).

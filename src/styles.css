@@ -116,8 +116,7 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
 .chart svg { display: block; }
 .chart .grid { stroke: var(--line); stroke-width: 1; }
 .chart .axis { fill: var(--muted); font-size: 11px; }
-.chart .line { fill: none; stroke-width: 2.5; stroke-linecap: round; }
-.chart .cursor { stroke: var(--muted); stroke-dasharray: 3 3; }
+.chart .line { fill: none; stroke-width: 2.5; stroke-linecap: round; }.chart .cursor { stroke: var(--muted); stroke-dasharray: 3 3; }
 .tip {
   position: absolute; top: -4px; transform: translateX(-50%);
   background: var(--text); color: var(--card); border-radius: 10px;
@@ -135,6 +134,11 @@ h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
 .channels .ok { color: #23995a; font-weight: 600; margin-left: auto; }
 .channels .bad { color: #d64545; font-weight: 600; margin-left: auto; }
 .fine { color: var(--muted); font-size: 12px; margin: 8px 0 0; line-height: 1.4; }
+
+.points .card-head { margin-bottom: 0; }
+.points .pts { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.points .pts.low { color: #d64545; }
+.points .fine { margin-top: 4px; }
 
 .map-link {
   display: flex; align-items: center; justify-content: center; gap: 8px;

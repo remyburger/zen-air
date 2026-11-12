@@ -2,14 +2,41 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Gauge from './components/Gauge.jsx';
 import HistoryChart from './components/HistoryChart.jsx';
 import Settings from './components/Settings.jsx';
-import { RANGES, fetchCurrent, fetchHistory, load, mapUrl, save } from './api.js';
+import { RANGES, fetchCurrent, fetchHistory, fetchPoints, load, mapUrl, save } from './api.js';
 import { category, channelsDisagree, effectivePm, pmToAqi, windowAdvice } from './aqi.js';
 
 const CFG_KEY = 'zen-air-config';
 const CUR_KEY = 'zen-air-current';
 const HIST_KEY = 'zen-air-history';
 const DEFAULT_CFG = { apiKey: '', sensorIndex: '325272', readKey: '', useEpa: true };
+const PTS_KEY = 'zen-air-points';
 const CURRENT_EVERY_MS = 2 * 60 * 1000; // sensor uploads every ~2 minutes
+const POINTS_EVERY_MS = 10 * 60 * 1000;
+const DAY_MS = 24 * 3600 * 1000;
+
+// Usage per day from stored balance snapshots: compares now with the snapshot
+// closest to 24h ago (or the oldest one, scaled to a day, if it's newer than that).
+function pointsUsage(snaps) {
+  if (!snaps?.length) return null;
+  const last = snaps[snaps.length - 1];
+  const target = last.at - DAY_MS;
+  let base = snaps[0];
+  for (const s of snaps) if (s.at <= target) base = s;
+  const span = last.at - base.at;
+  if (span < 2 * 3600 * 1000) return { remaining: last.remaining, perDay: null };
+  const used = base.remaining - last.remaining;
+  const perDay = Math.max(0, Math.round((used / span) * DAY_MS));
+  return {
+    remaining: last.remaining,
+    perDay,
+    days: perDay > 0 ? Math.floor(last.remaining / perDay) : null,
+    since: span < 20 * 3600 * 1000 ? base.at : null,
+  };
+}
+
+function fmtNum(n) {
+  return n.toLocaleString();
+}
 
 function ago(ms) {
   const m = Math.round(ms / 60000);
@@ -23,6 +50,7 @@ export default function App() {
   const [cfg, setCfg] = useState(() => ({ ...DEFAULT_CFG, ...load(CFG_KEY, {}) }));
   const [current, setCurrent] = useState(() => load(CUR_KEY, null));
   const [history, setHistory] = useState(() => load(HIST_KEY, {}));
+  const [ptsLog, setPtsLog] = useState(() => load(PTS_KEY, []));
   const [range, setRange] = useState('24h');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -59,7 +87,13 @@ export default function App() {
       if (!ready) return;
       const all = load(HIST_KEY, {});
       const cached = all[key];
-      if (!force && cached?.sensorIndex === cfg.sensorIndex && Date.now() - cached.fetchedAt < RANGES[key].cacheMs) return;
+      if (
+        !force &&
+        cached?.sensorIndex === cfg.sensorIndex &&
+        cached.average === RANGES[key].average && // refetch if the resolution changed
+        Date.now() - cached.fetchedAt < RANGES[key].cacheMs
+      )
+        return;
       try {
         const h = { ...(await fetchHistory(cfg, key)), sensorIndex: cfg.sensorIndex };
         const next = { ...load(HIST_KEY, {}), [key]: h };
@@ -72,30 +106,48 @@ export default function App() {
     [cfg, ready],
   );
 
+  const refreshPoints = useCallback(
+    async (force = false) => {
+      if (!cfg.apiKey) return;
+      const snaps = load(PTS_KEY, []);
+      const last = snaps[snaps.length - 1];
+      if (!force && last && Date.now() - last.at < POINTS_EVERY_MS) return;
+      try {
+        const p = await fetchPoints(cfg);
+        // Keep ~8 days of snapshots; a jump up means points were added, so restart the log.
+        let next = last && p.remaining > last.remaining ? [] : snaps;
+        next = [...next, p].filter((s) => p.at - s.at < 8 * DAY_MS);
+        setPtsLog(next);
+        save(PTS_KEY, next);
+      } catch {
+        /* non-critical; the card just stays hidden or stale */
+      }
+    },
+    [cfg],
+  );
+
   // Poll the live reading while the app is on screen; pause in the background to save points.
   useEffect(() => {
     if (!ready) return;
-    refreshCurrent();
-    refreshHistory('24h');
+    const all = () => {
+      refreshCurrent();
+      refreshHistory('24h');
+      refreshPoints();
+    };
+    all();
     const id = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        refreshCurrent();
-        refreshHistory('24h');
-      }
+      if (document.visibilityState === 'visible') all();
       tick((n) => n + 1);
     }, 30 * 1000);
     const onVis = () => {
-      if (document.visibilityState === 'visible') {
-        refreshCurrent();
-        refreshHistory('24h');
-      }
+      if (document.visibilityState === 'visible') all();
     };
     document.addEventListener('visibilitychange', onVis);
     return () => {
       clearInterval(id);
       document.removeEventListener('visibilitychange', onVis);
     };
-  }, [ready, refreshCurrent, refreshHistory]);
+  }, [ready, refreshCurrent, refreshHistory, refreshPoints]);
 
   useEffect(() => {
     if (range !== '24h') refreshHistory(range);
@@ -106,6 +158,10 @@ export default function App() {
     setCfg(next);
     save(CFG_KEY, next);
     setShowSettings(false);
+    if (next.apiKey !== cfg.apiKey) {
+      setPtsLog([]);
+      save(PTS_KEY, []);
+    }
     if (changedSensor) {
       setCurrent(null);
       setHistory({});
@@ -149,6 +205,7 @@ export default function App() {
   const advice = windowAdvice(aqi, trend);
   const offline = live?.lastSeen && Date.now() / 1000 - live.lastSeen > 15 * 60;
   const abWarn = live && channelsDisagree(live.cf1A, live.cf1B);
+  const usage = pointsUsage(ptsLog);
 
   return (
     <div className="app" style={{ '--accent': cat?.color ?? '#8a7fd6' }}>
@@ -251,6 +308,25 @@ export default function App() {
             <span className={abWarn ? 'bad' : 'ok'}>{abWarn ? 'Channels disagree' : 'Channels agree'}</span>
           </div>
           {abWarn && <p className="fine">One laser counter may be dirty or failing. A spider or dust inside the housing is the usual cause.</p>}
+        </section>
+      )}
+
+      {usage && (
+        <section className="card points">
+          <div className="card-head">
+            <h3>API points</h3>
+            <span className={`pts ${usage.remaining < 50000 ? 'low' : ''}`}>{fmtNum(usage.remaining)}</span>
+          </div>
+          <p className="fine">
+            {usage.perDay == null
+              ? 'Usage rate shows after a few hours of checks.'
+              : usage.perDay === 0
+                ? 'No points used recently.'
+                : `About ${fmtNum(usage.perDay)} a day${usage.since ? ` (based on use since ${new Date(usage.since).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })})` : ''}` +
+                  (usage.days != null
+                    ? ` · lasts ~${usage.days > 730 ? `${Math.round(usage.days / 365)} years` : usage.days > 60 ? `${Math.round(usage.days / 30)} months` : `${usage.days} days`}`
+                    : '')}
+          </p>
         </section>
       )}
 
