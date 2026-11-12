@@ -18,14 +18,30 @@ const CURRENT_FIELDS = [
   'pressure',
 ];
 
-const HISTORY_FIELDS = ['pm2.5_cf_1', 'pm2.5_atm', 'humidity'];
+// Detail options for the 24h chart (chosen in Settings).
+// average = minutes per point (0 = raw readings, about every 2 minutes).
+// cost = rough points per refresh with 2 fields, for the hint in Settings.
+export const RESOLUTIONS = {
+  hourly: { label: 'Hourly', average: 60, cacheMs: 30 * 60 * 1000, rows: 24, cost: '~50' },
+  '10min': { label: '10 min', average: 10, cacheMs: 10 * 60 * 1000, rows: 144, cost: '~300' },
+  raw: { label: 'Every 2 min', average: 0, cacheMs: 10 * 60 * 1000, rows: 720, cost: '~1,500' },
+};
+export const DEFAULT_RES = '10min';
 
-// average = minutes per point; PurpleAir limits how far back each average can reach.
 export const RANGES = {
-  // 10-minute averages (144 rows). 60 = hourly (cheapest), 0 = raw ~2-min readings (priciest).
-  '24h': { seconds: 24 * 3600, average: 10, cacheMs: 10 * 60 * 1000 },
+  '24h': { seconds: 24 * 3600 },
   '7d': { seconds: 7 * 24 * 3600, average: 60, cacheMs: 60 * 60 * 1000 },
 };
+
+// What a history request for this range and config looks like. `sig` changes whenever
+// the request would return different data, so the cache knows to refetch.
+export function historySpec(cfg, rangeKey) {
+  const res = RESOLUTIONS[cfg.historyRes] || RESOLUTIONS[DEFAULT_RES];
+  const { average, cacheMs } = rangeKey === '24h' ? res : RANGES[rangeKey];
+  // Only fetch the fields the current mode uses: EPA needs cf_1 + humidity, otherwise atm.
+  const fields = cfg.useEpa ? ['pm2.5_cf_1', 'humidity'] : ['pm2.5_atm'];
+  return { average, cacheMs, fields, sig: `${average}|${fields.join(',')}` };
+}
 
 async function request(path, params, { apiKey, readKey }) {
   const qs = new URLSearchParams(params);
@@ -78,14 +94,15 @@ export async function fetchCurrent(cfg) {
 
 export async function fetchHistory(cfg, rangeKey) {
   const r = RANGES[rangeKey];
+  const spec = historySpec(cfg, rangeKey);
   const end = Math.floor(Date.now() / 1000);
   const body = await request(
     `/sensors/${encodeURIComponent(cfg.sensorIndex)}/history`,
     {
       start_timestamp: String(end - r.seconds),
       end_timestamp: String(end),
-      average: String(r.average),
-      fields: HISTORY_FIELDS.join(','),
+      average: String(spec.average),
+      fields: spec.fields.join(','),
     },
     cfg,
   );
@@ -104,7 +121,7 @@ export async function fetchHistory(cfg, rangeKey) {
     }))
     .filter((p) => p.t != null)
     .sort((a, b) => a.t - b.t); // API doesn't guarantee order
-  return { range: rangeKey, average: r.average, rows, fetchedAt: Date.now() };
+  return { range: rangeKey, sig: spec.sig, rows, fetchedAt: Date.now() };
 }
 
 // Remaining API points for the key's organization. PurpleAir says this call is free.

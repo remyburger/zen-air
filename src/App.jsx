@@ -2,13 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Gauge from './components/Gauge.jsx';
 import HistoryChart from './components/HistoryChart.jsx';
 import Settings from './components/Settings.jsx';
-import { RANGES, fetchCurrent, fetchHistory, fetchPoints, load, mapUrl, save } from './api.js';
+import { DEFAULT_RES, RANGES, fetchCurrent, fetchHistory, fetchPoints, historySpec, load, mapUrl, save } from './api.js';
 import { category, channelsDisagree, effectivePm, pmToAqi, windowAdvice } from './aqi.js';
 
 const CFG_KEY = 'zen-air-config';
 const CUR_KEY = 'zen-air-current';
 const HIST_KEY = 'zen-air-history';
-const DEFAULT_CFG = { apiKey: '', sensorIndex: '325272', readKey: '', useEpa: true };
+const DEFAULT_CFG = { apiKey: '', sensorIndex: '325272', readKey: '', useEpa: true, historyRes: DEFAULT_RES };
 const PTS_KEY = 'zen-air-points';
 const CURRENT_EVERY_MS = 2 * 60 * 1000; // sensor uploads every ~2 minutes
 const POINTS_EVERY_MS = 10 * 60 * 1000;
@@ -87,11 +87,12 @@ export default function App() {
       if (!ready) return;
       const all = load(HIST_KEY, {});
       const cached = all[key];
+      const spec = historySpec(cfg, key);
       if (
         !force &&
         cached?.sensorIndex === cfg.sensorIndex &&
-        cached.average === RANGES[key].average && // refetch if the resolution changed
-        Date.now() - cached.fetchedAt < RANGES[key].cacheMs
+        cached.sig === spec.sig && // refetch if the detail level or EPA mode changed
+        Date.now() - cached.fetchedAt < spec.cacheMs
       )
         return;
       try {
@@ -176,16 +177,17 @@ export default function App() {
   const aqi = pmToAqi(pm);
   const cat = category(aqi);
 
+  // Only use cached history that matches the current settings; otherwise show "Loading".
   const toPoints = useCallback(
-    (h) =>
-      h && h.sensorIndex === cfg.sensorIndex
+    (h, key) =>
+      h && h.sensorIndex === cfg.sensorIndex && h.sig === historySpec(cfg, key).sig
         ? h.rows.map((r) => ({ t: r.t, aqi: pmToAqi(effectivePm(r, cfg.useEpa)) }))
         : null,
-    [cfg.sensorIndex, cfg.useEpa],
+    [cfg],
   );
 
-  const points = useMemo(() => toPoints(history[range]), [history, range, toPoints]);
-  const day = useMemo(() => toPoints(history['24h']), [history, toPoints]);
+  const points = useMemo(() => toPoints(history[range], range), [history, range, toPoints]);
+  const day = useMemo(() => toPoints(history['24h'], '24h'), [history, toPoints]);
 
   // Change vs. about an hour ago, from the 24h history
   const trend = useMemo(() => {
