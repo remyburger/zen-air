@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { DEFAULT_RES, RESOLUTIONS } from '../api.js';
 
 export default function Settings({ cfg, onSave, onClose, canClose }) {
   const [apiKey, setApiKey] = useState(cfg.apiKey || '');
   const [sensorIndex, setSensorIndex] = useState(cfg.sensorIndex || '');
   const [readKey, setReadKey] = useState(cfg.readKey || '');
   const [useEpa, setUseEpa] = useState(cfg.useEpa ?? true);
+  const [historyRes, setHistoryRes] = useState(RESOLUTIONS[cfg.historyRes] ? cfg.historyRes : DEFAULT_RES);
+  const res = RESOLUTIONS[historyRes];
 
   const valid = apiKey.trim() && /^\d+$/.test(sensorIndex.trim());
 
@@ -16,6 +19,7 @@ export default function Settings({ cfg, onSave, onClose, canClose }) {
       sensorIndex: sensorIndex.trim(),
       readKey: readKey.trim(),
       useEpa,
+      historyRes,
     });
   }
 
@@ -76,6 +80,32 @@ export default function Settings({ cfg, onSave, onClose, canClose }) {
             <small>US EPA's humidity and smoke correction. Closer to official monitors. Raises AQI a little on clean days, lowers it in smoke.</small>
           </span>
         </label>
+
+        <div className="field">
+          <span>24h chart detail</span>
+          <div className="seg full" role="radiogroup" aria-label="24h chart detail">
+            {Object.entries(RESOLUTIONS).map(([k, r]) => (
+              <button
+                key={k}
+                type="button"
+                role="radio"
+                aria-checked={k === historyRes}
+                className={k === historyRes ? 'on' : ''}
+                onClick={() => setHistoryRes(k)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <small>
+            {res.rows} points per day, {res.cost} API points per refresh.{' '}
+            {historyRes === 'raw'
+              ? 'Shows short spikes at full height, like the PurpleAir map.'
+              : historyRes === 'hourly'
+                ? 'Cheapest; smooths out short spikes.'
+                : 'Catches most spikes, but shortens brief ones.'}
+          </small>
+        </div>
 
         <p className="fine">Keys are stored only in this browser on this device.</p>
 

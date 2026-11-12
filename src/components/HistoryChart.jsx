@@ -116,7 +116,7 @@ export default function HistoryChart({ points, range }) {
           <text key={t} x={geo.x(t)} y={H - 6} textAnchor="middle" className="axis">{fmtTime(t, range)}</text>
         ))}
         {geo.segs.map((s, i) => (
-          <path key={i} d={s.d} stroke={s.color} className="line" />
+          <path key={i} d={s.d} stroke={s.color} className={points.length > 200 ? 'line dense' : 'line'} />
         ))}
         {hover && (
           <>
